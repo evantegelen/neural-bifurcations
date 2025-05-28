@@ -149,8 +149,8 @@ if __name__ == "__main__":
 
     data_name="Data/exp2_limit_ic.pth"
     x0_list=[1]
-    y0_list=[0.01]
-    a0_list=[0.61,0.62,0.63,0.64,0.65]
+    y0_list=[0.1]
+    a0_list=[0.62,0.64,0.66,0.68,0.7]
 
     initial_conditions = list(itertools.product(a0_list, y0_list, x0_list))
     initial_conditions = np.array(initial_conditions)[:, [2, 1, 0]] #[x,y,a]

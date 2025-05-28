@@ -42,7 +42,7 @@ def run_command(epochs,
 
 if __name__ == "__main__":
 
-    dataset     = "exp3_noise0.05"
+    dataset     = "exp2_increase_alpha"
 
     list_epochs=[10000]
     list_batchsize=[5]
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     list_rtol=[1e-5]
     list_seed=[121,232,343,454,565]
 
-    runname = "exp3_noise0.05"
+    runname = "exp2_increase_alpha"
 
     modelnumber=0
 
