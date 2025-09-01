@@ -10,24 +10,26 @@ import matplotlib.pyplot as plt
 import scipy.integrate as sc_int
 from math import exp
 import wandb
+import warnings
 
 if __name__ == "__main__":
     device = torch.device("cpu")
     
     ####Create argument parser####
+    warnings.filterwarnings("ignore")
 
     parser = argparse.ArgumentParser(description="Train model for validation")
 
-    parser.add_argument('--epochs',         type=int, default=100)
+    parser.add_argument('--epochs',         type=int, default=10001)
     parser.add_argument('--layers',         type=int, default=2)
     parser.add_argument('--depthlayers',    type=int,default=32)
     parser.add_argument('--trackloss',      type=bool, default=True)
     parser.add_argument('--learningrate',   type=float, default=0.001)
-    parser.add_argument('--batchlength',    type=int,default=10)
-    parser.add_argument('--batchsize',      type=int,default=16)
+    parser.add_argument('--batchlength',    type=int,default=20)
+    parser.add_argument('--batchsize',      type=int,default=10)
     parser.add_argument('--rtol',           type=float,default=1e-5)
     parser.add_argument('--runname',        type=str,default="Test")
-    parser.add_argument('--seed',           type=int,default="127")
+    parser.add_argument('--seed',           type=int,default="130")
     parser.add_argument('--dataset',        type=str,default="rossler_dataset")
     parser.add_argument('--validation_set', type=str,default="yes")
 
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     if track:
         run=wandb.init(
             # set the wandb project where this run will be logged
-                project="rossler_experiments",
+                project="rossler_experiments_large",
                 name=f"{runname}_{randomseed}",
         
             # track hyperparameters and run metadata
@@ -83,18 +85,27 @@ if __name__ == "__main__":
         ) 
 
     #Load the data
-    dataname=f"rossler_data.pth"
+    dataname=f"rossler_dataset_normalized.pth"
 
     data = torch.load(dataname)
-    data_x = (data["data"][:,0:8,:] * (1/10)).float().to(device)
-    data_a = (data["c_list"][0:8] * (1/5)).float().to(device)
-    data_t = data["sample_t"].float().to(device)
+    data_x = (data["x_data"][:,1:19,:] ).float().to(device)
+    data_a = (data["c_data"][1:19] ).float().to(device)
+    data_t = data["t_data"].float().to(device)
 
     if validation != "none":
-        data_x_val = (data["data"][:,8:9,:] * (1/10)).float().to(device)
-        data_a_val = (data["c_list"][8:9] * (1/5)).float().to(device)
-        data_t_val = data["sample_t"].float().to(device)
+        data_x_val = (data["x_data"][:,18:19,:]).float().to(device)
+        data_a_val = (data["c_data"][18:19] ).float().to(device)
+        data_t_val = data["t_data"].float().to(device)
 
+    #Load the normalization parameters
+    norm_vals = torch.load("rossler_normalization_stats.pth")
+    x_mean = norm_vals["xyz_mean"].to(device)
+    x_std = norm_vals["xyz_std"].to(device)
+    c_mean = norm_vals["c_mean"].to(device)
+    c_std = norm_vals["c_std"].to(device)
+    print("Loaded normalization values:")
+    print(f"x_mean: {x_mean}, x_std: {x_std}, c_mean: {c_mean}, c_std: {c_std}")
+    
     #Create dataframes from data
     dataframe = Dataframe(data_t, data_x, data_a, variables=3, drivers=1,batchlength=batchlength,batchsize=batchsize)
     if validation!="none": #Only if we want to do validation
@@ -125,6 +136,7 @@ if __name__ == "__main__":
             #Optimizer step
             loss.backward()
             optimizer.step()
+
         if track:
                 wandb.log({"batch_loss": loss})
 
@@ -148,37 +160,45 @@ if __name__ == "__main__":
         if epoch%10==0:
             print(f"{runname} {randomseed}: {epoch}  training loss {loss.item()}")
 
-        if epoch % 100 == 0:
+        
+        if epoch %500==0:
+
             # Save intermediate model
             file_name = f"{folder}/model.pth"
             torch.save(model.state_dict(), file_name)
 
-        if epoch %500==0:
             #Visualize training process
             with torch.no_grad():
-                plot_c_values = (torch.tensor([4.0, 6.0, 7.0], dtype=torch.float32)*1/10).to(device)
-                initial_state = (torch.tensor([[-4.0, -4.0, 0.0]]*3, dtype=torch.float32)*1/10).to(device)  # shape [5, 3]
-                t_plot = torch.linspace(0, 100, 200).float().to(device)  # 200 steps from 0 to 5
+                # 1. Normalize c values and initial state
+                plot_c_values = torch.tensor([2,2.5,3,3.5,4.0], dtype=torch.float32).to(device)
+                plot_c_values_norm = (plot_c_values - c_mean) / c_std
 
-                model.parameter_list = plot_c_values
+                initial_state = torch.tensor([[-4.0, -4.0, 0.0]] * 5, dtype=torch.float32).to(device)
+                initial_state_norm = (initial_state - x_mean) / x_std
 
-             # Forward pass for all r in one call
-            pred_traj = odeint(model, initial_state, t_plot, method='rk4', options={'step_size': 0.01}).detach().cpu().numpy()  # [T, 5, 3]
+                t_plot = torch.linspace(0, 100, 1001).float().to(device)  # 200 steps from 0 to 100
+
+                model.parameter_list = plot_c_values_norm
+
+                # Forward pass for all r in one call (normalized)
+                pred_traj_norm = odeint(model, initial_state_norm, t_plot, method='rk4', options={'step_size': 0.01}).detach().cpu()
+
+                # 2. Denormalize the predicted trajectories for plotting
+                pred_traj = pred_traj_norm * x_std.cpu() + x_mean.cpu()  # shape: [T, N, 3]
 
             fig, axs = plt.subplots(1, len(plot_c_values), figsize=(20, 4), subplot_kw={'projection': '3d'})
             if len(plot_c_values) == 1:
                 axs = [axs]
-            for idx, r_val in enumerate(plot_c_values.squeeze().tolist()):
+            for idx, r_val in enumerate(plot_c_values.tolist()):
                 ax = axs[idx]
                 ax.plot(pred_traj[:, idx, 0], pred_traj[:, idx, 1], pred_traj[:, idx, 2])
-                ax.set_title(f"r={r_val}")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
-                ax.set_zlabel("Z")
-                ax.set_xlim([-10/10, 15/10])
-                ax.set_ylim([-15/10, 0/10])
-                ax.set_zlim([0/10, 20/10])
-                #ax.scatter(data_x[:, :, 0].cpu().numpy(), data_x[:, :, 1].cpu().numpy(), data_x[:, :, 2].cpu().numpy(), color='red', s=1)
+                ax.set_title(f"c={r_val}")
+                ax.set_xlabel("x")
+                ax.set_ylabel("y")
+                ax.set_zlabel("z")
+                ax.set_xlim([-10, 15])
+                ax.set_ylim([-10, 0])
+                ax.set_zlim([0, 10])
             plot_path = f"{folder}/model_trajectories_epoch{epoch}.png"
             plt.savefig(plot_path)
             plt.close(fig)
@@ -188,4 +208,4 @@ if __name__ == "__main__":
 
     file_name=f"{folder}/model.pth"
     torch.save(model.state_dict(), file_name)
- 
+

@@ -10,15 +10,21 @@ import matplotlib.pyplot as plt
 import scipy.integrate as sc_int
 from math import exp
 import wandb
+import warnings
 
 if __name__ == "__main__":
+
+    #Surpress warnings
+    
+    warnings.filterwarnings("ignore")
+
     device = torch.device("cpu")
     
     ####Create argument parser####
 
     parser = argparse.ArgumentParser(description="Train model for vallidation")
 
-    parser.add_argument('--epochs',         type=int, default=50000)
+    parser.add_argument('--epochs',         type=int, default=7500)
     parser.add_argument('--layers',         type=int, default=2)
     parser.add_argument('--depthlayers',    type=int,default=32)
     parser.add_argument('--trackloss',      type=bool, default=False)
@@ -86,15 +92,22 @@ if __name__ == "__main__":
         ) 
 
     #Load the data
-    dataname=f"lorenz_dataset_normalized.pth"
+    dataname=f"Data/lorenz_dataset_normalized.pth"
 
     data = torch.load(dataname)
-    data_x = (data["x_data"][:,0:16,:] ).float().to(device)
-    data_a = (data["r_data"][0:16] ).float().to(device)
+    data_x = (data["x_data"][:,:16,:] ).float().to(device)
+    data_a = (data["r_data"][:16] ).float().to(device)
     data_t = data["t_data"].float().to(device)
 
+    print(data_x.shape)
+
+    if validation!="none":
+        data_x_val = (data["x_data"][:,14:16,:] ).float().to(device)
+        data_a_val = (data["r_data"][14:16] ).float().to(device)
+        data_t_val = data["t_data"].float().to(device)
+
     #Load the normalization parameters
-    norm_vals = torch.load("lorenz_normalization_stats.pth")
+    norm_vals = torch.load("Data/lorenz_normalization_stats.pth")
     x_mean = norm_vals["xyz_mean"].to(device)
     x_std = norm_vals["xyz_std"].to(device)
     r_mean = norm_vals["r_mean"].to(device)
@@ -104,12 +117,12 @@ if __name__ == "__main__":
     
     #Create dataframes from data
     dataframe = Dataframe(data_t, data_x, data_a, variables=3, drivers=1,batchlength=batchlength,batchsize=batchsize)
+    if validation!="none":
+        dataframe_validation = Dataframe(data_t_val, data_x_val, data_a_val, variables=3, drivers=1,batchlength=1,batchsize=1)
     
     #Create the model
     model=Neuralode(3, 1, parameter_list=data_a, hidden_layers=layers,depth_of_layers=depth).to(device)
     optimizer=torch.optim.Adam(model.parameters(), lr=learningrate)
-
-    #Create grids on which to calculate physicsloss
     
     for epoch in range(epochs):
 
@@ -128,17 +141,34 @@ if __name__ == "__main__":
             
             #Calculate losses
             loss = torch.mean(torch.abs(pred_x - batch)).to(device)
-
-            if track:
-                wandb.log({"batch_loss": loss})
         
             #Optimizer step
             loss.backward()
             optimizer.step()
+        
+        if track:
+                wandb.log({"batch_loss": loss})
 
+        #Calculate training loss
+        with torch.no_grad():
+            model.parameter_list=dataframe.data_a
+            pred_x = odeint(model, dataframe.data_x[0,:,:].float(), dataframe.data_t.float(), method='rk4', options={'step_size': 0.05})
+            train_loss = torch.mean(torch.abs(pred_x - dataframe.data_x))
+            if track:
+                wandb.log({"training loss": train_loss})
+
+        #Calculate validation loss
+        if validation!="none":
+            with torch.no_grad():
+                #Calculate validation loss
+                model.parameter_list=dataframe_validation.data_a
+                pred_x_test = odeint(model, dataframe_validation.data_x[0,:,:].float(), dataframe.data_t.float(), method='rk4', options={'step_size': 0.05})
+                val_loss = torch.mean(torch.abs(pred_x_test - dataframe_validation.data_x))
+                if track:
+                    wandb.log({"validation loss": val_loss}) 
 
         if epoch%10==0:
-            print(f"{runname} {randomseed}: {epoch}  training loss {loss.item()}")
+            print(f"{runname} {randomseed}: {epoch}  training loss {train_loss.item()}")
 
         if epoch % 500 == 0:
             # Save intermediate model
@@ -159,8 +189,8 @@ if __name__ == "__main__":
             init2_norm = ((init2 - x_mean) / x_std).to(device)
 
             # Forward pass for both initial conditions
-            pred_traj1 = odeint(model, init1_norm, t_plot, method='rk4', options={'step_size': 0.005}).detach().cpu().numpy()  # [T, 5, 3]
-            pred_traj2 = odeint(model, init2_norm, t_plot, method='rk4', options={'step_size': 0.005}).detach().cpu().numpy()  # [T, 5, 3]
+            pred_traj1 = odeint(model, init1_norm, t_plot, method='rk4', options={'step_size': 0.05}).detach().cpu().numpy()  # [T, 5, 3]
+            pred_traj2 = odeint(model, init2_norm, t_plot, method='rk4', options={'step_size': 0.05}).detach().cpu().numpy()  # [T, 5, 3]
 
             # Denormalize
             pred_traj1_denorm = pred_traj1 * x_std.cpu().numpy() + x_mean.cpu().numpy()

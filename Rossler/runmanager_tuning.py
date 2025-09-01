@@ -46,20 +46,21 @@ if __name__ == "__main__":
     """
 
     dataset     = "rossler_training"
-    validation  = "yes"
+    validation  = "none"
 
-    list_epochs=[5000]
-    list_batchsize=[4,8,20]
-    list_batchlength=[10,20]
-    list_learningrate=[0.0001,0.001,0.01]
-    list_layers=[1,2,3]
-    list_depth=[32,64]
+    list_epochs=[15001]
+    list_batchsize=[10]
+    list_batchlength=[40]
+    list_learningrate=[0.001]
+    list_layers=[2]
+    list_depth=[64]
     list_rtol=[1e-5]
-    list_seed=[121]
+    # Use three different seeds for each combination
+    list_seeds=[121,232,343,454,565]
 
-    runname = "test"
+    runname = "best"
 
-    modelnumber=0
+    modelnumber=1
 
     # Create all possible combinations
     all_combinations = list(itertools.product(
@@ -70,25 +71,24 @@ if __name__ == "__main__":
         list_layers,
         list_depth,
         list_rtol,
-        list_seed
     ))
 
     # Randomly sample 20 unique combinations
-    sampled_combinations = random.sample(all_combinations, min(20, len(all_combinations)))
+    sampled_combinations = random.sample(all_combinations, min(16, len(all_combinations)))
 
     with ProcessPoolExecutor(max_workers=8) as executor:
         futures = []
         for combo in sampled_combinations:
-            modelnumber += 1
-            epochs, batchsize, batchlength, learningrate, layers, dep, rtol, seed = combo
-            futures.append(
-                executor.submit(
-                    run_command,
-                    epochs, batchsize, batchlength, learningrate,  layers, dep, rtol, seed,
-                    f"{runname}{modelnumber}", dataset, validation
+            for seed in list_seeds:
+                epochs, batchsize, batchlength, learningrate, layers, dep, rtol = combo
+                futures.append(
+                    executor.submit(
+                        run_command,
+                        epochs, batchsize, batchlength, learningrate, layers, dep, rtol, seed,
+                        f"{runname}{modelnumber}", dataset, validation
+                    )
                 )
-            )
-            
+            modelnumber += 1
         for future in futures:
             try:
                 future.result()
