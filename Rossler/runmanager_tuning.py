@@ -49,16 +49,16 @@ if __name__ == "__main__":
     validation  = "none"
 
     list_epochs=[15001]
-    list_batchsize=[10]
+    list_batchsize=[11]
     list_batchlength=[40]
     list_learningrate=[0.001]
-    list_layers=[2]
-    list_depth=[64]
+    list_layers=[3]
+    list_depth=[16]
     list_rtol=[1e-5]
-    # Use three different seeds for each combination
-    list_seeds=[121,232,343,454,565]
+    # Use different seeds for each combination
+    list_seeds=[121,232,343,454,545]
 
-    runname = "best"
+    runname = "best_combo"
 
     modelnumber=1
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # Randomly sample 20 unique combinations
     sampled_combinations = random.sample(all_combinations, min(16, len(all_combinations)))
 
-    with ProcessPoolExecutor(max_workers=8) as executor:
+    with ProcessPoolExecutor(max_workers=5) as executor:
         futures = []
         for combo in sampled_combinations:
             for seed in list_seeds:
@@ -89,6 +89,7 @@ if __name__ == "__main__":
                     )
                 )
             modelnumber += 1
+
         for future in futures:
             try:
                 future.result()

@@ -26,10 +26,10 @@ if __name__ == "__main__":
     parser.add_argument('--trackloss',      type=bool, default=True)
     parser.add_argument('--learningrate',   type=float, default=0.001)
     parser.add_argument('--batchlength',    type=int,default=20)
-    parser.add_argument('--batchsize',      type=int,default=10)
+    parser.add_argument('--batchsize',      type=int,default=20)
     parser.add_argument('--rtol',           type=float,default=1e-5)
     parser.add_argument('--runname',        type=str,default="Test")
-    parser.add_argument('--seed',           type=int,default="130")
+    parser.add_argument('--seed',           type=int,default="124")
     parser.add_argument('--dataset',        type=str,default="rossler_dataset")
     parser.add_argument('--validation_set', type=str,default="yes")
 
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     if track:
         run=wandb.init(
             # set the wandb project where this run will be logged
-                project="rossler_experiments_large",
+                project="rossler_experiments_chaotic",
                 name=f"{runname}_{randomseed}",
         
             # track hyperparameters and run metadata
@@ -88,13 +88,13 @@ if __name__ == "__main__":
     dataname=f"rossler_dataset_normalized.pth"
 
     data = torch.load(dataname)
-    data_x = (data["x_data"][:,1:19,:] ).float().to(device)
-    data_a = (data["c_data"][1:19] ).float().to(device)
+    data_x = (data["x_data"][:,:,:] ).float().to(device)
+    data_a = (data["c_data"][:] ).float().to(device)
     data_t = data["t_data"].float().to(device)
 
     if validation != "none":
-        data_x_val = (data["x_data"][:,18:19,:]).float().to(device)
-        data_a_val = (data["c_data"][18:19] ).float().to(device)
+        data_x_val = (data["x_data"][:,0:1,:]).float().to(device)
+        data_a_val = (data["c_data"][0:1]).float().to(device)
         data_t_val = data["t_data"].float().to(device)
 
     #Load the normalization parameters
@@ -170,7 +170,7 @@ if __name__ == "__main__":
             #Visualize training process
             with torch.no_grad():
                 # 1. Normalize c values and initial state
-                plot_c_values = torch.tensor([2,2.5,3,3.5,4.0], dtype=torch.float32).to(device)
+                plot_c_values = torch.tensor([3,3.5,4.0,4.5,5.5], dtype=torch.float32).to(device)
                 plot_c_values_norm = (plot_c_values - c_mean) / c_std
 
                 initial_state = torch.tensor([[-4.0, -4.0, 0.0]] * 5, dtype=torch.float32).to(device)
@@ -196,9 +196,9 @@ if __name__ == "__main__":
                 ax.set_xlabel("x")
                 ax.set_ylabel("y")
                 ax.set_zlabel("z")
-                ax.set_xlim([-10, 15])
-                ax.set_ylim([-10, 0])
-                ax.set_zlim([0, 10])
+                #ax.set_xlim([-10, 15])
+                #ax.set_ylim([-10, 0])
+                #ax.set_zlim([0, 10])
             plot_path = f"{folder}/model_trajectories_epoch{epoch}.png"
             plt.savefig(plot_path)
             plt.close(fig)

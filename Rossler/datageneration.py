@@ -67,18 +67,16 @@ def generate_Rossler_data(c_list, initial_conditions, t_eval, a=0.2, b=0.2):
             idx += 1
     return data, t_eval
 
-# Example usage:
+## We generate data for our test case
 initial_state = [-4.0, -4.0, 0.0]  # Initial state for the Rössler system
-c_list = np.arange(2, 4.1, 0.1)  # c values from 2 to 4 (inclusive) with step size 0.25
-t_eval = np.linspace(0, 500, 20001)  # Example: 0 to 1000, 100001 points
+c_list = np.arange(4.5, 5.6, 0.1)  
+t_eval = np.linspace(0, 500, 20001) 
 
 data, t_eval = generate_Rossler_data(c_list, [initial_state], t_eval, a=0.2, b=0.2)
 
 data = data[19000:,:,:]
 t_eval = t_eval[19000:]-t_eval[19000]
 
-print(data.shape)
-print(t_eval.shape)
 
 sampling_number = 5
 
@@ -115,10 +113,10 @@ for idx in range(data.shape[1]):
     print(f"Saved subsampled plot: {fname}")
 
 # ---------------------------
-# Normalization (based on first 10 trajectories used for training)
+# Normalization (based on training data - validation)
 # ---------------------------
-selected_data = data[:, :19, :]  # Use only first 14 trajectories for normalization
-selected_c = c_tensor[:19]
+selected_data = data[:, 1:, :] 
+selected_c = c_tensor[1:]
 
 # Compute mean and std for x, y, z
 xyz_mean = selected_data.reshape(-1, 3).mean(dim=0)
@@ -179,3 +177,4 @@ for idx in range(data_norm.shape[1]):
     plt.close(fig)
     print(f"Saved normalized plot: {fname}")
 
+print(t_eval)
